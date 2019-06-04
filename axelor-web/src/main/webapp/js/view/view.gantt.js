@@ -119,6 +119,8 @@ function GanttViewCtrl($scope, $element) {
   var ds = $scope._dataSource;
   var view = $scope._views.gantt;
   var initialized = false;
+  var dsPage = null;
+  var offset = 0;
 
   $scope.onShow = function(viewPromise) {
 
@@ -169,10 +171,12 @@ function GanttViewCtrl($scope, $element) {
       fields: searchFields,
       filter: false,
       domain: this._domain,
-      store: false
+      store: false,
+      offset: offset
     };
 
-    ds.search(opts).success(function(records) {
+    ds.search(opts).success(function(records,page) {
+      dsPage=page;
       callback(records);
     });
   };
@@ -211,6 +215,36 @@ function GanttViewCtrl($scope, $element) {
     return ds.remove(record).success(function(res){
       return true;
     });
+  };
+
+  $scope.canNext = function() {
+    var page = dsPage;
+    return page && page.to < page.total;
+  };
+
+  $scope.canPrev = function() {
+    var page = dsPage;
+    return page && page.from > 0;
+  };
+
+  $scope.onNext = function() {
+    var page = dsPage;
+    offset= page.from + page.limit;
+    $scope.onRefresh();
+  };
+
+  $scope.onPrev = function() {
+    var page = dsPage;
+    offset= Math.max(0, page.from - page.limit);
+    $scope.onRefresh();
+  };
+
+  $scope.pagerText = function() {
+    var page = dsPage;
+    if (page && page.from !== undefined) {
+      if (page.total === 0) return null;
+      return _t("{0} to {1} of {2}", page.from + 1, page.to, page.total);
+    }
   };
 
 }
