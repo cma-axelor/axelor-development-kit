@@ -11,10 +11,18 @@
         <div class="btn-group">
           <button class="btn" ng-click="onRefresh()"><span x-translate>Refresh</span></button>
           <button class="btn" ng-click="onPrint()"><span x-translate>Print</span></button>
+          <button class="btn" ng-click="onSortByStartDate()"><span x-translate>Sort by Start date</span></button>
+          <button class="btn" ng-click="onSortByEndDate()"><span x-translate>Sort by End date</span></button>
         </div>
-        <div ui-view-switcher class="pull-right"></div>
-        <div class="record-pager pull-right">
-          <span ng-bind-html-unsafe="pagerText()"></span>
+        <div class="btn-group">
+          <label ng-style="{'display':'inline-block','margin-right':'10px'}" for="fromDate"><span x-translate>gantt.from</span></label>
+          <div  ng-style="{'display':'inline-block'}" id="fromDate"  ng-change="onChangeDates('fromDate',fromDate)"   ui-date  ng-model="fromDate"></div>
+          <label ng-style="{'display':'inline-block','margin-left':'25px','margin-right':'10px'}" for="toDate"><span x-translate>gantt.to</span></label>
+          <div ng-style="{'display':'inline-block'}" id="toDate" ng-change="onChangeDates('toDate',toDate)" ui-date ng-model="toDate"></div>          
+        </div>
+        <div class="record-toolbar-right">
+          <div ui-view-switcher class="pull-right"></div>
+          <div ui-record-pager class="pull-right"></div>
         </div>
       </div>
     </div>

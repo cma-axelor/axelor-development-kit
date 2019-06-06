@@ -119,7 +119,9 @@ function GanttViewCtrl($scope, $element) {
   var ds = $scope._dataSource;
   var view = $scope._views.gantt;
   var initialized = false;
-
+  var dsPage = null;
+  var offset = 0;
+  
   $scope.onShow = function(viewPromise) {
 
     if (initialized) {
@@ -165,15 +167,71 @@ function GanttViewCtrl($scope, $element) {
       }
     });
 
+    var sortBy = [];
+    var domain = '';
+    
+    if(schema.taskSequence) {
+      sortBy.push(schema.taskSequence);
+    }
+    sortBy.push(schema.taskStart);
+
     var opts = {
       fields: searchFields,
       filter: false,
       domain: this._domain,
-      store: false
+      store: false,
+      sortBy:sortBy,
+      offset:offset
     };
 
-    ds.search(opts).success(function(records) {
-      callback(records);
+    if(this._domain) {
+      domain=`(${this._domain}) and (self.${schema.taskStart}  BETWEEN :fromDate AND :toDate)`;
+    } else {
+      domain=`self.${schema.taskStart}  BETWEEN :fromDate AND :toDate`;
+    }
+    
+    var fromDate = $scope.fromDate;
+    var toDate = $scope.toDate;
+
+    if(fromDate && toDate) {
+      opts=_.extend(opts,{
+        domain:domain,
+        context: { fromDate: fromDate , toDate: toDate }
+      });
+    }
+
+    function fetchParents(records,cb) { 
+      var parentRecordIds = _.chain(records)
+                              .map(function(record) { 
+                                    return record[schema.taskParent]?
+                                            record[schema.taskParent].id:
+                                            null; 
+                                  })
+                              .compact().uniq().value();
+      var recordIds = _.chain(records)
+                        .map(function(record) { return record.id }).uniq().value();
+      var _parentIds = _.difference(parentRecordIds,recordIds);
+            
+      if(_parentIds.length == 0) {
+        return cb(records);
+      }
+      opts=_.extend(opts,{
+        domain:`self.id in (:_parentIds)`,
+        context: { _parentIds: _parentIds},
+        offset:0
+      });
+      
+      ds.search(opts).success(function(parentRecords) {
+        records=records.concat(parentRecords);
+        fetchParents(records,cb);
+      });
+    }
+    
+    ds.search(opts).success(function(records,page) {
+      dsPage=page;
+      fetchParents(records,function(records){
+        callback(records);
+      });
     });
   };
 
@@ -213,6 +271,41 @@ function GanttViewCtrl($scope, $element) {
     });
   };
 
+  $scope.doSaveAll = function(tasks,cb) {
+    return ds.saveAll(_.pluck(tasks,'record')).success(function(res) {
+      cb(tasks,res);
+    })
+  };
+
+  $scope.canNext = function() {
+    var page = dsPage;
+    return page && page.to < page.total;
+  };
+
+   $scope.canPrev = function() {
+    var page = dsPage;
+    return page && page.from > 0;
+  };
+
+   $scope.onNext = function() {
+    var page = dsPage;
+    offset= page.from + page.limit;
+    $scope.onRefresh();
+  };
+
+   $scope.onPrev = function() {
+    var page = dsPage;
+    offset= Math.max(0, page.from - page.limit);
+    $scope.onRefresh();
+  };
+
+   $scope.pagerText = function() {
+    var page = dsPage;
+    if (page && page.from !== undefined) {
+      if (page.total === 0) return null;
+      return _t("{0} to {1} of {2}", page.from + 1, page.to, page.total);
+    }
+  };
 }
 
 ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewService, ActionService) {
@@ -225,6 +318,9 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
     var firstField = fields[fieldNames[0]];
     var mode = schema.mode || "week";
     var editor = null;
+    var updatedTasks = [];
+    scope.fromDate = new Date();
+    scope.toDate = new Date();
     ganttInit();
 
     function byId(list, id) {
@@ -372,7 +468,9 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
      }
 
      function ganttInit(){
-       gantt = main.dhx_gantt();
+       gantt = main.dhx_gantt({
+          order_branch:true
+       });
        setScaleConfig("week");
        gantt.templates.leftside_text = function(start, end, task){
           if (!task.progress){
@@ -391,7 +489,6 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
        gantt._onLinkIdChange = null;
        gantt.config.autosize = "x";
        gantt.config.grid_resize = true;
-       gantt.config.order_branch = true;
        gantt.config.date_grid = "%d/%m/%Y %H %i";
        gantt.serverList("users", []);
 
@@ -508,6 +605,95 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
          }
        });
 
+       gantt.attachEvent("onRowDragStart", function(id, target, e) {
+          if(!schema.taskSequence) {
+            return true;
+          }
+
+          updatedTasks.length = 0;
+
+          var currentTask = gantt.getTask(id);          
+          var tasks = gantt.getTaskBy(function(task){
+            return task.$level == currentTask.$level && task.parent == currentTask.parent;
+          });
+          var checkSortorder = _.some(tasks,function(task){
+            return task.sortorder != 0;
+          });
+
+          if(!checkSortorder) {
+            for(var i=0;i<tasks.length;i++) {
+              var task = tasks[i];
+              task.sortorder = i+1;
+              task.record[schema.taskSequence] = i+1;
+              gantt.refreshTask(task.id);
+              updatedTasks.push(task);          
+            }
+          }
+
+          return true;
+       }); 
+
+        //prevent moving to another sub-branch:
+       gantt.attachEvent("onBeforeRowDragEnd", function(id, parent, tindex) {
+          var task = gantt.getTask(id);
+          return task.parent == parent;
+       });
+
+       gantt.attachEvent("onRowDragEnd", function(id, target) {
+          if(!schema.taskSequence || !target){
+            return;
+          }
+          var nextTask;
+          var targetTaskId;
+          
+          // get id of adjacent task and check whether updated task should go before or after it
+          if(target.toString().startsWith("next:")) {
+            targetTaskId = target.substr("next:".length);
+            nextTask = true;
+          } else {
+            targetTaskId = target;
+            nextTask = false;
+          }
+
+          if(!targetTaskId){
+            return;
+          }
+          
+          var currentTask = gantt.getTask(id);
+          var targetTask = gantt.getTask(targetTaskId);
+
+          // updated task will receive the sortorder value of the adjacent task
+          var targetOrder = targetTask.sortorder;
+          
+          // if it should go after the adjacent task, it should receive a bigger sortorder
+          if(nextTask){
+            targetOrder++;
+          }
+
+          // increase sort orders of tasks that should go after the updated task
+          var tasks = gantt.getTaskBy(function(task){
+            return task.sortorder >= targetOrder 
+                      && task.$level == currentTask.$level 
+                      && task.parent == currentTask.parent;
+          });
+
+          for(var i=0;i<tasks.length;i++){
+            var task = tasks[i];
+            if(task.id != id){
+              task.record[schema.taskSequence] = ++task.sortorder;
+              updatedTasks.push(task);
+            }
+          }
+
+          // and update the task with its new sortorder
+          currentTask.sortorder = targetOrder;
+          currentTask.record[schema.taskSequence] = currentTask.sortorder;
+          updatedTasks.push(currentTask);  
+          
+          scope.doSaveAll(updatedTasks,function(tasks,recs){
+            scope.onRefresh();
+          });
+      });    
      }
 
      function fetchRecords() {
@@ -582,7 +768,7 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
         record[schema.taskProgress] = item.progress*100;
       }
       if(schema.taskSequence){
-        record[schema.taskSequence] = item.order;
+        record[schema.taskSequence] = item.sortorder;
       }
       if(schema.taskDuration){
         record[schema.taskDuration] = duration;
@@ -750,7 +936,30 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
         }
         return "#"+c()+c()+c();
      }
+    
+    function sortBy(key){
+        if(!schema.taskSequence){
+          return;
+        }
+        
+        var tasks = gantt.getTaskBy(function(task){
+          return task.$level == 0;
+        });
+        var sortedTasks = _.sortBy(tasks,function(task){
+            return task[key];
+        }); 
+        for(var i=0;i<sortedTasks.length;i++){
+          sortedTasks[i].record[schema.taskSequence]=i+1;
+        }
+        
+        if(sortedTasks.length == 0){
+          return;
+        }
 
+        scope.doSaveAll(sortedTasks,function(tasks,rec){
+          scope.onRefresh(); 
+        });
+     }
 
     scope.onMode = function(name) {
       setScaleConfig(name);
@@ -775,6 +984,23 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
       }});
     };
 
+    scope.onSortByStartDate = function(){
+      sortBy('start_date');
+    };
+
+    scope.onSortByEndDate = function(){ 
+      sortBy('end_date');     
+    };
+
+    scope.onChangeDates = function(key,value){ 
+        if(key == 'fromDate'){
+          scope.fromDate = value?new Date(value):null;
+        }else if( key == 'toDate'){
+          scope.toDate = value?new Date(value):null;
+        }
+        scope.onRefresh();         
+    }
+    
     scope.$on('$destroy', function() {
       gantt.clearAll();
       gantt.detachAllEvents();
