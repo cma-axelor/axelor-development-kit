@@ -156,7 +156,9 @@ function GanttViewCtrl($scope, $element) {
                           schema.startToStart,
                           schema.finishToFinish,
                           schema.startToFinish,
-                          schema.taskUser
+                          schema.taskUser,
+                          schema.plannedStart,
+                          schema.plannedEnd
     ];
 
     _.each(optionalFields,function(optField){
@@ -227,10 +229,10 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
     var editor = null;
     ganttInit();
 
-    function byId(list, id) {
+    function byId(list, id, field) {
       for (var i = 0; i < list.length; i++) {
         if (list[i].key == id)
-          return list[i].label || "";
+          return list[i][field] || "";
       }
       return "";
     }
@@ -298,7 +300,7 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
 
        if (schema.taskUser) {
          columns.push({name: "users", label: fields[schema.taskUser].title, align: "center", template: function (item) {
-          return byId(gantt.serverList("users"), item.user_id);
+          return byId(gantt.serverList("users"), item.user_id, 'label');
          }});
        }
 
@@ -394,7 +396,33 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
        gantt.config.grid_resize = true;
        gantt.config.order_branch = true;
        gantt.config.date_grid = "%d/%m/%Y %H %i";
+       gantt.config.task_height = 22;
+       gantt.config.row_height = 50;
        gantt.serverList("users", []);
+       gantt.addTaskLayer({
+         renderer:{
+           render: function(task) {
+              if(task.planned_start && task.planned_end) {
+                var sizes = gantt.getTaskPosition(task, task.planned_start, task.planned_end);
+                var el = document.createElement('div');
+                el.className = 'baseline';
+                el.style.left = sizes.left+'px';
+                el.style.width = sizes.width + 'px';
+                el.style.top = sizes.top + gantt.config.task_height + 10 + 'px';
+                el.style.height = gantt.config.task_height - 5 + 'px';
+                el.style.background = byId(gantt.serverList("users"), task.user_id, 'backgroundColor') || '#3db9d3';
+                return el;
+              }
+              return false;
+           },
+          getRectangle: function(task, view){
+            if (task.planned_start && task.planned_end) {
+              return gantt.getTaskPosition(task, task.planned_start, task.planned_end);
+            }
+              return null;
+            }
+         }
+       });
 
        gantt.eachSuccessor = function(callback, root){
          if(!this.isTaskExists(root))
@@ -433,7 +461,15 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
      function ganttAttachEvents(){
 
        gantt.templates.rightside_text = function(start, end, task){
-        return byId(gantt.serverList("users"), task.user_id);
+        if (task.planned_end && end) {
+          const plannedEnd = moment(task.planned_end);
+          const endDate = moment(end);
+          if (endDate > plannedEnd) {
+            const text  = _t('Overdue') +': '+ endDate.diff(plannedEnd, 'days') +' '+_t('days');
+            return `<b>${text}</b>`;
+          }
+        }
+        return "";
        };
 
       if (schema.taskUser) {
@@ -508,6 +544,13 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
            },id );
          }
        });
+
+       gantt.attachEvent("onTaskLoading", function (task) {
+        task.planned_start = gantt.date.parseDate(task.planned_start, "xml_date");
+        task.planned_end = gantt.date.parseDate(task.planned_end, "xml_date");
+        task.$open = false;
+        return true;
+      });
 
      }
 
@@ -702,7 +745,7 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
         task.duration = rec[schema.taskDuration];
       }
       else if(endDate){
-        task.duration = gantt.calculateDuration(startDate.toDate(), endDate);
+        task.duration = gantt.calculateDuration(startDate.toDate(), endDate.toDate());
       }
       else{
         task.duration = "1";
@@ -738,6 +781,26 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
             textColor:"#FFF"
             });
         }
+      }
+
+      if(schema.plannedStart && rec[schema.plannedStart]){
+        const plannedStart = moment(rec[schema.plannedStart]);
+          if(task.isNew){
+            task.planned_start = plannedStart.format("DD-MM-YYYY HH:mm:SS");
+          }
+          else{
+            task.planned_start = plannedStart.toDate();
+          }
+      }
+
+      if(schema.plannedEnd && rec[schema.plannedEnd]){
+        const plannedEnd = moment(rec[schema.plannedEnd]);
+          if(task.isNew){
+            task.planned_end = plannedEnd.format("DD-MM-YYYY HH:mm:SS");
+          }
+          else{
+            task.planned_end = plannedEnd.toDate();
+          }
       }
 
       return task;

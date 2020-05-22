@@ -1719,6 +1719,20 @@
             </xsd:documentation>
           </xsd:annotation>
         </xsd:attribute>
+        <xsd:attribute name="plannedStart" type="xsd:string" use="optional">
+          <xsd:annotation>
+            <xsd:documentation>
+              Planning start date to display base lines.
+            </xsd:documentation>
+          </xsd:annotation>
+        </xsd:attribute>
+        <xsd:attribute name="plannedEnd" type="xsd:string" use="optional">
+          <xsd:annotation>
+            <xsd:documentation>
+              Planning end date to display base lines.
+            </xsd:documentation>
+          </xsd:annotation>
+        </xsd:attribute>
         <xsd:attribute name="x-finish-to-start" type="xsd:string" use="optional">
           <xsd:annotation>
             <xsd:documentation>

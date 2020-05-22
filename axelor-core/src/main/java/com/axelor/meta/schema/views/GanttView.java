@@ -40,6 +40,10 @@ public class GanttView extends AbstractView {
   @XmlAttribute private String taskProgress;
 
   @XmlAttribute private String taskUser;
+  
+  @XmlAttribute private String plannedStart;
+  
+  @XmlAttribute private String plannedEnd;
 
   @XmlAttribute(name = "x-start-to-start")
   private String startToStart;
@@ -151,4 +155,21 @@ public class GanttView extends AbstractView {
   public void setItems(List<AbstractWidget> items) {
     this.items = items;
   }
+
+  public void setPlannedStart(String plannedStart) {
+	  this.plannedStart = plannedStart;
+  }
+
+  public String getPlannedStart() {
+	  return plannedStart;
+  }
+  
+  public void setPlannedEnd(String plannedEnd) {
+	  this.plannedEnd = plannedEnd;
+  }
+
+  public String getPlannedEnd() {
+	  return plannedEnd;
+  }
+  
 }
