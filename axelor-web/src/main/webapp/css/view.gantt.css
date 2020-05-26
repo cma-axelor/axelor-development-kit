@@ -85,3 +85,21 @@
 .gantt_resource_task .gantt_task_progress{
   background-color:rgba(33,33,33,0.3);
 }
+
+.gantt_task_line, .gantt_line_wrapper {
+  margin-top: -10px;
+}
+
+.baseline {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 0.6;
+  margin-top: -0.5%;
+}
+
+.gantt_task_link .gantt_link_arrow {
+  margin-top: -12px;
+}
+.gantt_side_content.gantt_right {
+  bottom: 0;
+}

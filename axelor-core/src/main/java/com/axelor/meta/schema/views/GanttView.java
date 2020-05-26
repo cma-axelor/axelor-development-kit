@@ -40,6 +40,10 @@ public class GanttView extends AbstractView {
   @XmlAttribute private String taskProgress;
 
   @XmlAttribute private String taskUser;
+  
+  @XmlAttribute private String plannedStart;
+
+  @XmlAttribute private String plannedEnd;
 
   @XmlAttribute(name = "x-start-to-start")
   private String startToStart;
@@ -52,6 +56,9 @@ public class GanttView extends AbstractView {
 
   @XmlAttribute(name = "x-finish-to-finish")
   private String finishToFinish;
+
+  @XmlAttribute(name = "milestone")
+  private String isMileStone;
 
   @XmlElement(name = "field", type = Field.class)
   private List<AbstractWidget> items;
@@ -144,6 +151,14 @@ public class GanttView extends AbstractView {
     this.finishToFinish = finishToFinish;
   }
 
+  public String getIsMileStone() {
+    return isMileStone;
+  }
+
+  public void setIsMileStone(String isMileStone) {
+    this.isMileStone = isMileStone;
+  }
+
   public List<AbstractWidget> getItems() {
     return items;
   }
@@ -151,4 +166,21 @@ public class GanttView extends AbstractView {
   public void setItems(List<AbstractWidget> items) {
     this.items = items;
   }
+  
+  public void setPlannedStart(String plannedStart) {
+	  this.plannedStart = plannedStart;
+  }
+
+  public String getPlannedStart() {
+	  return plannedStart;
+  }
+
+  public void setPlannedEnd(String plannedEnd) {
+	  this.plannedEnd = plannedEnd;
+  }
+
+  public String getPlannedEnd() {
+	  return plannedEnd;
+  }
+  
 }
