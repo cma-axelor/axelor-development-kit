@@ -446,7 +446,10 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
      }
 
      function ganttInit(){
-       gantt = main.dhx_gantt();
+      gantt = main.dhx_gantt({
+        order_branch:true,
+        order_branch_free:true
+       });
        setScaleConfig("week");
        gantt.templates.leftside_text = function(start, end, task){
           if (!task.progress){
@@ -581,6 +584,16 @@ ui.directive('uiViewGantt', ['ViewService', 'ActionService', function(ViewServic
            },id );
          }
        });
+
+       gantt.attachEvent("onRowDragEnd", function(id, target) {
+        var task = gantt.getTask(id);
+        if(task.parent != target.parent){
+          var parentTask = task.parent ? gantt.getTask(task.parent) : null;
+          task.record[schema.taskParent] = parentTask? parentTask.record : null;
+          scope.doSave(task,updateTask);
+        }
+        gantt.render();
+      });
 
      }
 
